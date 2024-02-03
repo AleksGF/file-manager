@@ -3,24 +3,6 @@ import { argv } from 'node:process';
 import { homedir as getHomedir } from 'os';
 import { dictionary as dict } from './costants.js';
 
-export const getState = () => {
-  const username = getUserName();
-  const homeDir = getHomedir();
-
-  const pathObject = path.parse(homeDir);
-
-  return {
-    username,
-    pathObject,
-  };
-};
-
-export const getUserName = () =>
-  argv
-    ?.slice(2)
-    ?.filter((arg) => arg.startsWith('--username='))[0]
-    ?.split('=')[1] ?? dict.ANONYMOUS_USER_NAME;
-
 export const doGreeting = (username) => {
   console.clear();
   console.log(dict.GET_GREETING_TEXT(username));
@@ -33,6 +15,14 @@ export const doBye = (username) => {
 
 export const showErrorMsgOnExit = () => {
   console.log(dict.ERROR_MSG_ON_EXIT);
+};
+
+export const showErrorMsgOnInvalidInput = () => {
+  console.log(dict.ERROR_MSG_ON_INVALID_INPUT);
+};
+
+export const showErrorMsgOnOperationFailed = () => {
+  console.log(dict.ERROR_MSG_ON_OPERATION_FAILED);
 };
 
 export const getInvitationText = (pathObject) =>
