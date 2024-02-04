@@ -2,7 +2,9 @@ import fsPromises from 'fs/promises';
 import { argv } from 'node:process';
 import { homedir as getHomedir } from 'os';
 import path from 'path';
-import { dictionary as dict } from '../manager/costants.js';
+import { pipeline } from 'stream/promises';
+import { createBrotliCompress, createBrotliDecompress } from 'zlib';
+import { dictionary as dict } from '../costants.js';
 
 export const getUserName = () =>
   argv
@@ -35,7 +37,7 @@ export const isPathExists = async (path) => {
   }
 };
 
-export const isPathAccessible = async (path) => {
+const isPathAccessible = async (path) => {
   try {
     await fsPromises.access(path);
 
@@ -45,7 +47,7 @@ export const isPathAccessible = async (path) => {
   }
 };
 
-export const isDirectory = async (path) => {
+const isDirectory = async (path) => {
   try {
     const stat = await fsPromises.stat(path);
 
@@ -66,3 +68,54 @@ export const isFile = async (path) => {
 };
 
 export const isValidFileName = (fileName) => /^[a-zA-Z0-9_.-]+$/.test(fileName);
+
+export const dirCheckError = async (dirPath) => {
+  if (!(await isPathExists(dirPath)) || !(await isDirectory(dirPath))) {
+    return dict.NO_DIRECTORY;
+  }
+
+  if (!(await isPathAccessible(dirPath))) {
+    return dict.PERMISSION_DENIED;
+  }
+
+  return null;
+};
+
+export const fileCheckError = async (filePath) => {
+  if (!(await isPathExists(filePath)) || !(await isFile(filePath))) {
+    return dict.NO_FILE;
+  }
+
+  if (!(await isPathAccessible(filePath))) {
+    return dict.PERMISSION_DENIED;
+  }
+
+  return null;
+};
+
+export const getPromiseForBrotli = (srcPath, destPath, action) =>
+  new Promise(async (resolve, reject) => {
+    try {
+      const br =
+        action === 'decompress'
+          ? createBrotliDecompress()
+          : createBrotliCompress();
+
+      const srcHandler = await fsPromises.open(srcPath, 'r');
+      const distHandler = await fsPromises.open(destPath, 'w');
+
+      const readableStream = srcHandler.createReadStream();
+      const writableStream = distHandler.createWriteStream();
+
+      writableStream.on('finish', async () => {
+        await srcHandler.close();
+        await distHandler.close();
+        await fsPromises.unlink(srcPath);
+        resolve();
+      });
+
+      await pipeline(readableStream, br, writableStream);
+    } catch (e) {
+      reject(e);
+    }
+  });

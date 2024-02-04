@@ -2,18 +2,17 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import fsPromises from 'fs/promises';
-import { pipeline } from 'stream/promises';
 import { createHash } from 'crypto';
-import { createBrotliCompress, createBrotliDecompress } from 'zlib';
-import { AppError } from './appError.js';
+import { dictionary as dict } from '../costants.js';
+import { AppError } from '../appError.js';
 import {
   getState,
-  isDirectory,
-  isFile,
   isPathExists,
-  isPathAccessible,
   isValidFileName,
   getAbsolutePath,
+  dirCheckError,
+  fileCheckError,
+  getPromiseForBrotli,
 } from './utils.js';
 
 export class Controller {
@@ -41,20 +40,15 @@ export class Controller {
       path.isAbsolute(destPath) &&
       destPathObject.root !== this.state.pathObject.root
     )
-      throw new AppError('You can go to another root');
+      throw new AppError(dict.ERROR_CHANGE_ROOT);
 
     const newPath = getAbsolutePath(
       destPath,
       path.format(this.state.pathObject)
     );
 
-    if (!(await isPathExists(newPath)) || !(await isDirectory(newPath))) {
-      throw new AppError('No such directory');
-    }
-
-    if (!(await isPathAccessible(newPath))) {
-      throw new AppError('Your permission denied');
-    }
+    const dirCheckResult = await dirCheckError(newPath);
+    if (dirCheckResult) throw new AppError(dirCheckResult);
 
     this._state.pathObject = path.parse(newPath);
   }
@@ -66,7 +60,7 @@ export class Controller {
       );
 
       if (fullList.length === 0) {
-        console.log('\x1b[32mDirectory is empty\x1b[0m');
+        console.log(dict.DIRECTORY_IS_EMPTY);
       } else {
         const list = await Promise.all(
           fullList.map(async (name) => {
@@ -74,21 +68,24 @@ export class Controller {
               path.join(path.format(this.state.pathObject), name)
             );
 
-            return { Name: name, Type: stat.isDirectory() ? 'DIR' : 'file' };
+            return {
+              Name: name,
+              Type: stat.isDirectory() ? dict.DIR : dict.FILE,
+            };
           })
         );
 
         console.table([
           ...list
-            .filter((item) => item.Type === 'DIR')
+            .filter((item) => item.Type === dict.DIR)
             .sort((a, b) => a.Name.localeCompare(b.Name)),
           ...list
-            .filter((item) => item.Type === 'file')
+            .filter((item) => item.Type === dict.FILE)
             .sort((a, b) => a.Name.localeCompare(b.Name)),
         ]);
       }
     } catch (e) {
-      throw new Error('Error while reading directory');
+      throw new Error(dict.ERROR_READ_DIR);
     }
   }
 
@@ -98,74 +95,72 @@ export class Controller {
       path.format(this.state.pathObject)
     );
 
-    if (!(await isPathExists(newFilePath)) || !(await isFile(newFilePath))) {
-      throw new AppError('No such file');
+    const fileCheckResult = await fileCheckError(newFilePath);
+    if (fileCheckResult) throw new AppError(fileCheckResult);
+
+    try {
+      await new Promise((resolve, reject) => {
+        try {
+          const readableStream = fs.createReadStream(newFilePath, 'utf8');
+
+          readableStream.on('error', () => {
+            throw new Error(dict.ERROR_READ_FILE);
+          });
+
+          readableStream.on('data', (chunk) => {
+            console.log(chunk.toString());
+          });
+
+          readableStream.on('end', () => {
+            resolve();
+          });
+        } catch (e) {
+          reject(e);
+        }
+      });
+    } catch (e) {
+      throw new AppError(dict.ERROR_READ_FILE);
     }
-
-    if (!(await isPathAccessible(newFilePath))) {
-      throw new AppError('Your permission denied');
-    }
-
-    await new Promise((resolve) => {
-      const readableStream = fs.createReadStream(newFilePath, 'utf8');
-
-      readableStream.on('error', () => {
-        throw new Error('Error while reading file');
-      });
-
-      readableStream.on('data', (chunk) => {
-        console.log(chunk.toString());
-      });
-
-      readableStream.on('end', () => {
-        resolve();
-      });
-    });
   }
 
   async add(fileName) {
     if (!isValidFileName(fileName)) {
-      throw new AppError('Invalid file name');
+      throw new AppError(dict.INVALID_FILE_NAME);
     }
 
     const filePath = path.join(path.format(this.state.pathObject), fileName);
 
     if (await isPathExists(filePath)) {
-      throw new AppError('File already exists');
+      throw new AppError(dict.FILE_EXISTS);
     }
 
     try {
       await fsPromises.writeFile(filePath, '');
     } catch (e) {
-      throw new Error('Error while creating file');
+      throw new Error(dict.ERROR_CREATE_FILE);
     }
   }
 
   async rn(src, newName) {
     const srcPath = getAbsolutePath(src, path.format(this.state.pathObject));
 
-    if (!(await isPathExists(srcPath)) || !(await isFile(srcPath))) {
-      throw new AppError('No such file');
-    }
-
-    if (!(await isPathAccessible(srcPath))) {
-      throw new AppError('Your permission denied');
-    }
+    const fileCheckResult = await fileCheckError(srcPath);
+    if (fileCheckResult) throw new AppError(fileCheckResult);
 
     if (!isValidFileName(newName)) {
-      throw new AppError('Invalid file name');
+      throw new AppError(dict.INVALID_FILE_NAME);
     }
 
     const newPath = path.join(path.dirname(srcPath), newName);
 
     if (await isPathExists(newPath)) {
-      throw new AppError('File already exists');
+      throw new AppError(dict.FILE_EXISTS);
     }
 
     try {
       await fsPromises.rename(srcPath, newPath);
     } catch (e) {
-      throw new Error('Error while renaming file');
+      throw new Error(dict.ERROR_RENAME_FILE);
     }
   }
 
@@ -176,52 +171,51 @@ export class Controller {
       path.format(this.state.pathObject)
     );
 
-    if (!(await isPathExists(srcPath)) || !(await isFile(srcPath))) {
-      throw new AppError('No such file');
-    }
+    const fileCheckResult = await fileCheckError(srcPath);
+    if (fileCheckResult) throw new AppError(fileCheckResult);
 
-    if (!(await isPathExists(destPath)) || !(await isDirectory(destPath))) {
-      throw new AppError('No such directory');
-    }
-
-    if (
-      !(await isPathAccessible(srcPath)) ||
-      !(await isPathAccessible(destPath))
-    ) {
-      throw new AppError('Your permission denied');
-    }
+    const dirCheckResult = await dirCheckError(destPath);
+    if (dirCheckResult) throw new AppError(dirCheckResult);
 
     if (destPath === path.dirname(srcPath)) {
-      throw new AppError('Source and destination are the same');
+      throw new AppError(dict.ERROR_NOT_UNIQUE);
     }
 
     const newPath = path.join(destPath, path.basename(srcPath));
 
     if (await isPathExists(newPath)) {
-      throw new AppError('File already exists');
+      throw new AppError(dict.FILE_EXISTS);
     }
 
-    await new Promise((resolve) => {
-      const readableStream = fs.createReadStream(srcPath);
-      const writableStream = fs.createWriteStream(newPath);
+    try {
+      await new Promise((resolve, reject) => {
+        try {
+          const readableStream = fs.createReadStream(srcPath);
+          const writableStream = fs.createWriteStream(newPath);
 
-      readableStream.on('error', () => {
-        throw new Error('Error while copying file');
-      });
+          readableStream.on('error', () => {
+            throw new Error(dict.ERROR_COPY_FILE);
+          });
 
-      writableStream.on('error', () => {
-        throw new Error('Error while copying file');
-      });
+          writableStream.on('error', () => {
+            throw new Error(dict.ERROR_COPY_FILE);
+          });
 
-      readableStream.on('data', (chunk) => {
-        writableStream.write(chunk);
-      });
+          readableStream.on('data', (chunk) => {
+            writableStream.write(chunk);
+          });
 
-      readableStream.on('end', () => {
-        writableStream.end();
-        resolve();
+          readableStream.on('end', () => {
+            writableStream.end();
+            resolve();
+          });
+        } catch (e) {
+          reject(e);
+        }
       });
-    });
+    } catch (e) {
+      throw new Error(dict.ERROR_COPY_FILE);
+    }
   }
 
   async mv(srcPath, destDir) {
@@ -235,49 +229,42 @@ export class Controller {
       path.format(this.state.pathObject)
     );
 
-    if (!(await isPathExists(srcPath)) || !(await isFile(srcPath))) {
-      throw new AppError('No such file');
-    }
-
-    if (!(await isPathAccessible(srcPath))) {
-      throw new AppError('Your permission denied');
-    }
+    const fileCheckResult = await fileCheckError(srcPath);
+    if (fileCheckResult) throw new AppError(fileCheckResult);
 
     try {
       await fsPromises.unlink(srcPath);
     } catch (e) {
-      throw new Error('Error while deleting file');
+      throw new Error(dict.ERROR_DELETE_FILE);
     }
   }
 
   os(arg) {
     switch (arg) {
       case '--EOL':
-        console.log(`System EOL: \x1b[34m${JSON.stringify(os.EOL)}\x1b[0m`);
+        console.log(dict.GET_OS_EOL_TEXT(os.EOL));
         break;
 
       case '--cpus':
         const cpus = os.cpus();
-        console.log(`CPUs amount: \x1b[34m${cpus.length}\x1b[0m`);
+        console.log(dict.GET_CPU_AMOUNT_TEXT(cpus.length));
         console.table(cpus, ['model', 'speed']);
         break;
 
       case '--homedir':
-        console.log(`System homedir: \x1b[34m${os.homedir()}\x1b[0m`);
+        console.log(dict.GET_OS_HOMEDIR_TEXT(os.homedir()));
         break;
 
       case '--username':
-        console.log(
-          `System username: \x1b[34m${os.userInfo().username}\x1b[0m`
-        );
+        console.log(dict.GET_USERNAME_TEXT(os.userInfo().username));
         break;
 
       case '--architecture':
-        console.log(`System architecture: \x1b[34m${os.arch()}\x1b[0m`);
+        console.log(dict.GET_OS_ARCH_TEXT(os.arch()));
         break;
 
       default:
-        throw new Error('Invalid argument');
+        throw new Error(dict.ERROR_INVALID_ARG);
     }
   }
 
@@ -287,32 +274,35 @@ export class Controller {
       path.format(this.state.pathObject)
     );
 
-    if (!(await isPathExists(srcPath)) || !(await isFile(srcPath))) {
-      throw new AppError('No such file');
+    const fileCheckResult = await fileCheckError(srcPath);
+    if (fileCheckResult) throw new AppError(fileCheckResult);
+
+    try {
+      const hashSum = await new Promise((resolve, reject) => {
+        try {
+          const readableStream = fs.createReadStream(srcPath);
+          const hash = createHash('sha256');
+
+          readableStream.on('error', () => {
+            throw new Error(dict.ERROR_READ_FILE);
+          });
+
+          readableStream.on('data', (chunk) => {
+            hash.update(chunk);
+          });
+
+          readableStream.on('end', () => {
+            resolve(hash.digest('hex'));
+          });
+        } catch (e) {
+          reject(e);
+        }
+      });
+
+      console.log(hashSum);
+    } catch (e) {
+      throw new AppError(dict.ERROR_READ_FILE);
     }
-
-    if (!(await isPathAccessible(srcPath))) {
-      throw new AppError('Your permission denied');
-    }
-
-    const hashSum = await new Promise((resolve) => {
-      const readableStream = fs.createReadStream(srcPath);
-      const hash = createHash('sha256');
-
-      readableStream.on('error', () => {
-        throw new Error('Error while reading file');
-      });
-
-      readableStream.on('data', (chunk) => {
-        hash.update(chunk);
-      });
-
-      readableStream.on('end', () => {
-        resolve(hash.digest('hex'));
-      });
-    });
-
-    console.log(hashSum);
   }
 
   async compress(filePath, dest) {
@@ -321,58 +311,23 @@ export class Controller {
       path.format(this.state.pathObject)
     );
 
-    if (!(await isPathExists(srcPath)) || !(await isFile(srcPath))) {
-      throw new AppError('No such file');
-    }
-
-    if (!(await isPathAccessible(srcPath))) {
-      throw new AppError('Your permission denied');
-    }
+    const fileCheckResult = await fileCheckError(srcPath);
+    if (fileCheckResult) throw new AppError(fileCheckResult);
 
     const destPath = getAbsolutePath(dest, path.format(this.state.pathObject));
 
-    if (
-      !(await isPathExists(path.dirname(destPath))) ||
-      !(await isDirectory(path.dirname(destPath)))
-    ) {
-      throw new AppError('No destination directory');
+    if (await isPathExists(destPath)) {
+      throw new AppError(dict.FILE_EXISTS);
     }
 
-    if (!(await isPathAccessible(path.dirname(destPath)))) {
-      throw new AppError('Your permission denied');
+    const dirCheckResult = await dirCheckError(path.dirname(destPath));
+    if (dirCheckResult) throw new AppError(dirCheckResult);
+
+    try {
+      await getPromiseForBrotli(srcPath, destPath, 'compress');
+    } catch (e) {
+      throw new Error(dict.ERROR_COMPRESS_FILE);
     }
-
-    // TODO add try and catch
-    await new Promise(async (resolve) => {
-      const br = createBrotliCompress();
-
-      const srcHandler = await fsPromises.open(srcPath, 'r');
-      const distHandler = await fsPromises.open(destPath, 'w');
-
-      const readableStream = srcHandler.createReadStream();
-      const writableStream = distHandler.createWriteStream();
-
-      readableStream.on('error', () => {
-        throw new Error('Error while reading file');
-      });
-
-      writableStream.on('error', () => {
-        throw new Error('Error while writing file');
-      });
-
-      writableStream.on('finish', async () => {
-        await srcHandler.close();
-        await distHandler.close();
-        await fsPromises.unlink(srcPath);
-        resolve();
-      });
-
-      try {
-        await pipeline(readableStream, br, writableStream);
-      } catch (e) {
-        throw new Error('Error while compressing file');
-      }
-    });
   }
 
   async decompress(filePath, dest) {
@@ -381,56 +336,22 @@ export class Controller {
       path.format(this.state.pathObject)
     );
 
-    if (!(await isPathExists(srcPath)) || !(await isFile(srcPath))) {
-      throw new AppError('No such file');
-    }
-
-    if (!(await isPathAccessible(srcPath))) {
-      throw new AppError('Your permission denied');
-    }
+    const fileCheckResult = await fileCheckError(srcPath);
+    if (fileCheckResult) throw new AppError(fileCheckResult);
 
     const destPath = getAbsolutePath(dest, path.format(this.state.pathObject));
 
-    if (
-      !(await isPathExists(path.dirname(destPath))) ||
-      !(await isDirectory(path.dirname(destPath)))
-    ) {
-      throw new AppError('No destination directory');
+    if (await isPathExists(destPath)) {
+      throw new AppError(dict.FILE_EXISTS);
     }
 
-    if (!(await isPathAccessible(path.dirname(destPath)))) {
-      throw new AppError('Your permission denied');
+    const dirCheckResult = await dirCheckError(path.dirname(destPath));
+    if (dirCheckResult) throw new AppError(dirCheckResult);
+
+    try {
+      await getPromiseForBrotli(srcPath, destPath, 'decompress');
+    } catch (e) {
+      throw new Error(dict.ERROR_DECOMPRESS_FILE);
     }
-
-    await new Promise(async (resolve) => {
-      const br = createBrotliDecompress();
-
-      const srcHandler = await fsPromises.open(srcPath, 'r');
-      const distHandler = await fsPromises.open(destPath, 'w');
-
-      const readableStream = srcHandler.createReadStream();
-      const writableStream = distHandler.createWriteStream();
-
-      readableStream.on('error', () => {
-        throw new Error('Error while reading file');
-      });
-
-      writableStream.on('error', () => {
-        throw new Error('Error while writing file');
-      });
-
-      writableStream.on('finish', async () => {
-        await srcHandler.close();
-        await distHandler.close();
-        await fsPromises.unlink(srcPath);
-        resolve();
-      });
-
-      try {
-        await pipeline(readableStream, br, writableStream);
-      } catch (e) {
-        throw new Error('Error while decompressing file');
-      }
-    });
   }
 }

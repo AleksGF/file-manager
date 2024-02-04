@@ -1,5 +1,6 @@
 import readline from 'readline';
 import process, { stdin as input, stdout as output } from 'node:process';
+import { AppError } from '../appError.js';
 import { Controller } from '../controller/controller.js';
 import {
   doGreeting,
@@ -59,10 +60,11 @@ export const startFileManager = () => {
           showErrorMsgOnInvalidInput();
         }
       } catch (e) {
-        // TODO: show 'Invalid input' with args errors
-        console.log(e.code);
-        console.log(e.message);
-        showErrorMsgOnOperationFailed();
+        if (e instanceof AppError) {
+          showErrorMsgOnInvalidInput(e.message);
+        } else {
+          showErrorMsgOnOperationFailed();
+        }
       }
 
       ask(getInvitationText(controller.state.pathObject));
