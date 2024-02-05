@@ -4,7 +4,7 @@ import path from 'path';
 import fsPromises from 'fs/promises';
 import { createHash } from 'crypto';
 import { dictionary as dict } from '../costants.js';
-import { AppError } from '../appError.js';
+import { Errors } from 'src/errors.js';
 import {
   getState,
   isPathExists,
@@ -40,7 +40,7 @@ export class Controller {
       path.isAbsolute(destPath) &&
       destPathObject.root !== this.state.pathObject.root
     )
-      throw new AppError(dict.ERROR_CHANGE_ROOT);
+      throw new Errors(dict.ERROR_CHANGE_ROOT);
 
     const newPath = getAbsolutePath(
       destPath,
@@ -48,7 +48,7 @@ export class Controller {
     );
 
     const dirCheckResult = await dirCheckError(newPath);
-    if (dirCheckResult) throw new AppError(dirCheckResult);
+    if (dirCheckResult) throw new Errors(dirCheckResult);
 
     this._state.pathObject = path.parse(newPath);
   }
@@ -96,7 +96,7 @@ export class Controller {
     );
 
     const fileCheckResult = await fileCheckError(newFilePath);
-    if (fileCheckResult) throw new AppError(fileCheckResult);
+    if (fileCheckResult) throw new Errors(fileCheckResult);
 
     try {
       await new Promise((resolve, reject) => {
@@ -119,19 +119,19 @@ export class Controller {
         }
       });
     } catch (e) {
-      throw new AppError(dict.ERROR_READ_FILE);
+      throw new Errors(dict.ERROR_READ_FILE);
     }
   }
 
   async add(fileName) {
     if (!isValidFileName(fileName)) {
-      throw new AppError(dict.INVALID_FILE_NAME);
+      throw new Errors(dict.INVALID_FILE_NAME);
     }
 
     const filePath = path.join(path.format(this.state.pathObject), fileName);
 
     if (await isPathExists(filePath)) {
-      throw new AppError(dict.FILE_EXISTS);
+      throw new Errors(dict.FILE_EXISTS);
     }
 
     try {
@@ -145,16 +145,16 @@ export class Controller {
     const srcPath = getAbsolutePath(src, path.format(this.state.pathObject));
 
     const fileCheckResult = await fileCheckError(srcPath);
-    if (fileCheckResult) throw new AppError(fileCheckResult);
+    if (fileCheckResult) throw new Errors(fileCheckResult);
 
     if (!isValidFileName(newName)) {
-      throw new AppError(dict.INVALID_FILE_NAME);
+      throw new Errors(dict.INVALID_FILE_NAME);
     }
 
     const newPath = path.join(path.dirname(srcPath), newName);
 
     if (await isPathExists(newPath)) {
-      throw new AppError(dict.FILE_EXISTS);
+      throw new Errors(dict.FILE_EXISTS);
     }
 
     try {
@@ -172,19 +172,19 @@ export class Controller {
     );
 
     const fileCheckResult = await fileCheckError(srcPath);
-    if (fileCheckResult) throw new AppError(fileCheckResult);
+    if (fileCheckResult) throw new Errors(fileCheckResult);
 
     const dirCheckResult = await dirCheckError(destPath);
-    if (dirCheckResult) throw new AppError(dirCheckResult);
+    if (dirCheckResult) throw new Errors(dirCheckResult);
 
     if (destPath === path.dirname(srcPath)) {
-      throw new AppError(dict.ERROR_NOT_UNIQUE);
+      throw new Errors(dict.ERROR_NOT_UNIQUE);
     }
 
     const newPath = path.join(destPath, path.basename(srcPath));
 
     if (await isPathExists(newPath)) {
-      throw new AppError(dict.FILE_EXISTS);
+      throw new Errors(dict.FILE_EXISTS);
     }
 
     try {
@@ -230,7 +230,7 @@ export class Controller {
     );
 
     const fileCheckResult = await fileCheckError(srcPath);
-    if (fileCheckResult) throw new AppError(fileCheckResult);
+    if (fileCheckResult) throw new Errors(fileCheckResult);
 
     try {
       await fsPromises.unlink(srcPath);
@@ -275,7 +275,7 @@ export class Controller {
     );
 
     const fileCheckResult = await fileCheckError(srcPath);
-    if (fileCheckResult) throw new AppError(fileCheckResult);
+    if (fileCheckResult) throw new Errors(fileCheckResult);
 
     try {
       const hashSum = await new Promise((resolve, reject) => {
@@ -301,7 +301,7 @@ export class Controller {
 
       console.log(hashSum);
     } catch (e) {
-      throw new AppError(dict.ERROR_READ_FILE);
+      throw new Errors(dict.ERROR_READ_FILE);
     }
   }
 
@@ -312,16 +312,16 @@ export class Controller {
     );
 
     const fileCheckResult = await fileCheckError(srcPath);
-    if (fileCheckResult) throw new AppError(fileCheckResult);
+    if (fileCheckResult) throw new Errors(fileCheckResult);
 
     const destPath = getAbsolutePath(dest, path.format(this.state.pathObject));
 
     if (await isPathExists(destPath)) {
-      throw new AppError(dict.FILE_EXISTS);
+      throw new Errors(dict.FILE_EXISTS);
     }
 
     const dirCheckResult = await dirCheckError(path.dirname(destPath));
-    if (dirCheckResult) throw new AppError(dirCheckResult);
+    if (dirCheckResult) throw new Errors(dirCheckResult);
 
     try {
       await getPromiseForBrotli(srcPath, destPath, 'compress');
@@ -337,16 +337,16 @@ export class Controller {
     );
 
     const fileCheckResult = await fileCheckError(srcPath);
-    if (fileCheckResult) throw new AppError(fileCheckResult);
+    if (fileCheckResult) throw new Errors(fileCheckResult);
 
     const destPath = getAbsolutePath(dest, path.format(this.state.pathObject));
 
     if (await isPathExists(destPath)) {
-      throw new AppError(dict.FILE_EXISTS);
+      throw new Errors(dict.FILE_EXISTS);
     }
 
     const dirCheckResult = await dirCheckError(path.dirname(destPath));
-    if (dirCheckResult) throw new AppError(dirCheckResult);
+    if (dirCheckResult) throw new Errors(dirCheckResult);
 
     try {
       await getPromiseForBrotli(srcPath, destPath, 'decompress');

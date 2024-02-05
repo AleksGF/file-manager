@@ -1,15 +1,13 @@
 import readline from 'readline';
 import process, { stdin as input, stdout as output } from 'node:process';
-import { AppError } from '../appError.js';
+import { Errors } from '../errors.js';
 import { Controller } from '../controller/controller.js';
-import {
-  doGreeting,
-  doBye,
-  showErrorMsgOnExit,
-  getInvitationText,
-  showErrorMsgOnInvalidInput,
-  showErrorMsgOnOperationFailed,
-} from './utils.js';
+import { doGreeting } from './utils/doGreeting.js';
+import { doBye } from './utils/doBye.js';
+import { showErrorMsgOnExit } from './utils/showErrorMsgOnExit.js';
+import { showErrorMsgOnInvalidInput } from './utils/showErrorMsgOnInvalidInput.js';
+import { showErrorMsgOnOperationFailed } from './utils/showErrorMsgOnOperationFailed.js';
+import { getInvitationText } from './utils/getInvitationText.js';
 
 export const startFileManager = () => {
   const controller = new Controller();
@@ -60,7 +58,7 @@ export const startFileManager = () => {
           showErrorMsgOnInvalidInput();
         }
       } catch (e) {
-        if (e instanceof AppError) {
+        if (e instanceof Errors) {
           showErrorMsgOnInvalidInput(e.message);
         } else {
           showErrorMsgOnOperationFailed();
