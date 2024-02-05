@@ -67,7 +67,8 @@ export const isFile = async (path) => {
   }
 };
 
-export const isValidFileName = (fileName) => /^[a-zA-Z0-9_.-]+$/.test(fileName);
+export const isValidFileName = (fileName) =>
+  /^[a-zA-Z0-9_.-]{3,255}$/.test(fileName);
 
 export const dirCheckError = async (dirPath) => {
   if (!(await isPathExists(dirPath)) || !(await isDirectory(dirPath))) {
