@@ -1,6 +1,6 @@
 import readline from 'readline';
 import process, { stdin as input, stdout as output } from 'node:process';
-import { Errors } from '../errors.js';
+import { AppError, InputError } from '../errors.js';
 import { Controller } from '../controller/controller.js';
 import { doGreeting } from './utils/doGreeting.js';
 import { doBye } from './utils/doBye.js';
@@ -58,8 +58,10 @@ export const startFileManager = () => {
           showErrorMsgOnInvalidInput();
         }
       } catch (e) {
-        if (e instanceof Errors) {
+        if (e instanceof InputError) {
           showErrorMsgOnInvalidInput(e.message);
+        } else if (e instanceof AppError) {
+          showErrorMsgOnOperationFailed(e.message);
         } else {
           showErrorMsgOnOperationFailed();
         }

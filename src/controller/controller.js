@@ -4,7 +4,7 @@ import path from 'path';
 import fsPromises from 'fs/promises';
 import { createHash } from 'crypto';
 import { dictionary as dict } from '../costants.js';
-import { Errors } from 'src/errors.js';
+import { AppError, InputError } from '../errors.js';
 import {
   getState,
   isPathExists,
@@ -34,13 +34,15 @@ export class Controller {
   }
 
   async cd(destPath) {
+    if (!destPath) throw new InputError(dict.ERROR_INVALID_ARG);
+
     const destPathObject = path.parse(destPath);
 
     if (
       path.isAbsolute(destPath) &&
       destPathObject.root !== this.state.pathObject.root
     )
-      throw new Errors(dict.ERROR_CHANGE_ROOT);
+      throw new AppError(dict.ERROR_CHANGE_ROOT);
 
     const newPath = getAbsolutePath(
       destPath,
@@ -48,7 +50,7 @@ export class Controller {
     );
 
     const dirCheckResult = await dirCheckError(newPath);
-    if (dirCheckResult) throw new Errors(dirCheckResult);
+    if (dirCheckResult) throw new AppError(dirCheckResult);
 
     this._state.pathObject = path.parse(newPath);
   }
@@ -85,18 +87,20 @@ export class Controller {
         ]);
       }
     } catch (e) {
-      throw new Error(dict.ERROR_READ_DIR);
+      throw new AppError(dict.ERROR_READ_DIR);
     }
   }
 
   async cat(filePath) {
+    if (!filePath) throw new InputError(dict.ERROR_INVALID_ARG);
+
     const newFilePath = getAbsolutePath(
       filePath,
       path.format(this.state.pathObject)
     );
 
     const fileCheckResult = await fileCheckError(newFilePath);
-    if (fileCheckResult) throw new Errors(fileCheckResult);
+    if (fileCheckResult) throw new AppError(fileCheckResult);
 
     try {
       await new Promise((resolve, reject) => {
@@ -104,7 +108,7 @@ export class Controller {
           const readableStream = fs.createReadStream(newFilePath, 'utf8');
 
           readableStream.on('error', () => {
-            throw new Error(dict.ERROR_READ_FILE);
+            throw new AppError(dict.ERROR_READ_FILE);
           });
 
           readableStream.on('data', (chunk) => {
@@ -119,52 +123,58 @@ export class Controller {
         }
       });
     } catch (e) {
-      throw new Errors(dict.ERROR_READ_FILE);
+      throw new AppError(dict.ERROR_READ_FILE);
     }
   }
 
   async add(fileName) {
+    if (!fileName) throw new InputError(dict.ERROR_INVALID_ARG);
+
     if (!isValidFileName(fileName)) {
-      throw new Errors(dict.INVALID_FILE_NAME);
+      throw new AppError(dict.INVALID_FILE_NAME);
     }
 
     const filePath = path.join(path.format(this.state.pathObject), fileName);
 
     if (await isPathExists(filePath)) {
-      throw new Errors(dict.FILE_EXISTS);
+      throw new AppError(dict.FILE_EXISTS);
     }
 
     try {
       await fsPromises.writeFile(filePath, '');
     } catch (e) {
-      throw new Error(dict.ERROR_CREATE_FILE);
+      throw new AppError(dict.ERROR_CREATE_FILE);
     }
   }
 
   async rn(src, newName) {
+    if (!src || !newName) throw new InputError(dict.ERROR_INVALID_ARG);
+
     const srcPath = getAbsolutePath(src, path.format(this.state.pathObject));
 
     const fileCheckResult = await fileCheckError(srcPath);
-    if (fileCheckResult) throw new Errors(fileCheckResult);
+    if (fileCheckResult) throw new AppError(fileCheckResult);
 
     if (!isValidFileName(newName)) {
-      throw new Errors(dict.INVALID_FILE_NAME);
+      throw new AppError(dict.INVALID_FILE_NAME);
     }
 
     const newPath = path.join(path.dirname(srcPath), newName);
 
     if (await isPathExists(newPath)) {
-      throw new Errors(dict.FILE_EXISTS);
+      throw new AppError(dict.FILE_EXISTS);
     }
 
     try {
       await fsPromises.rename(srcPath, newPath);
     } catch (e) {
-      throw new Error(dict.ERROR_RENAME_FILE);
+      throw new AppError(dict.ERROR_RENAME_FILE);
     }
   }
 
   async cp(src, destDir) {
+    if (!src || !destDir) throw new InputError(dict.ERROR_INVALID_ARG);
+
     const srcPath = getAbsolutePath(src, path.format(this.state.pathObject));
     const destPath = getAbsolutePath(
       destDir,
@@ -172,19 +182,19 @@ export class Controller {
     );
 
     const fileCheckResult = await fileCheckError(srcPath);
-    if (fileCheckResult) throw new Errors(fileCheckResult);
+    if (fileCheckResult) throw new AppError(fileCheckResult);
 
     const dirCheckResult = await dirCheckError(destPath);
-    if (dirCheckResult) throw new Errors(dirCheckResult);
+    if (dirCheckResult) throw new AppError(dirCheckResult);
 
     if (destPath === path.dirname(srcPath)) {
-      throw new Errors(dict.ERROR_NOT_UNIQUE);
+      throw new InputError(dict.ERROR_NOT_UNIQUE);
     }
 
     const newPath = path.join(destPath, path.basename(srcPath));
 
     if (await isPathExists(newPath)) {
-      throw new Errors(dict.FILE_EXISTS);
+      throw new AppError(dict.FILE_EXISTS);
     }
 
     try {
@@ -194,11 +204,11 @@ export class Controller {
           const writableStream = fs.createWriteStream(newPath);
 
           readableStream.on('error', () => {
-            throw new Error(dict.ERROR_COPY_FILE);
+            throw new AppError(dict.ERROR_COPY_FILE);
           });
 
           writableStream.on('error', () => {
-            throw new Error(dict.ERROR_COPY_FILE);
+            throw new AppError(dict.ERROR_COPY_FILE);
           });
 
           readableStream.on('data', (chunk) => {
@@ -214,7 +224,7 @@ export class Controller {
         }
       });
     } catch (e) {
-      throw new Error(dict.ERROR_COPY_FILE);
+      throw new AppError(dict.ERROR_COPY_FILE);
     }
   }
 
@@ -224,22 +234,26 @@ export class Controller {
   }
 
   async rm(filePath) {
+    if (!filePath) throw new InputError(dict.ERROR_INVALID_ARG);
+
     const srcPath = getAbsolutePath(
       filePath,
       path.format(this.state.pathObject)
     );
 
     const fileCheckResult = await fileCheckError(srcPath);
-    if (fileCheckResult) throw new Errors(fileCheckResult);
+    if (fileCheckResult) throw new AppError(fileCheckResult);
 
     try {
       await fsPromises.unlink(srcPath);
     } catch (e) {
-      throw new Error(dict.ERROR_DELETE_FILE);
+      throw new AppError(dict.ERROR_DELETE_FILE);
     }
   }
 
   os(arg) {
+    if (!arg) throw new InputError(dict.ERROR_INVALID_ARG);
+
     switch (arg) {
       case '--EOL':
         console.log(dict.GET_OS_EOL_TEXT(os.EOL));
@@ -264,18 +278,20 @@ export class Controller {
         break;
 
       default:
-        throw new Error(dict.ERROR_INVALID_ARG);
+        throw new InputError(dict.ERROR_INVALID_ARG);
     }
   }
 
   async hash(filePath) {
+    if (!filePath) throw new InputError(dict.ERROR_INVALID_ARG);
+
     const srcPath = getAbsolutePath(
       filePath,
       path.format(this.state.pathObject)
     );
 
     const fileCheckResult = await fileCheckError(srcPath);
-    if (fileCheckResult) throw new Errors(fileCheckResult);
+    if (fileCheckResult) throw new AppError(fileCheckResult);
 
     try {
       const hashSum = await new Promise((resolve, reject) => {
@@ -284,7 +300,7 @@ export class Controller {
           const hash = createHash('sha256');
 
           readableStream.on('error', () => {
-            throw new Error(dict.ERROR_READ_FILE);
+            throw new AppError(dict.ERROR_READ_FILE);
           });
 
           readableStream.on('data', (chunk) => {
@@ -301,57 +317,61 @@ export class Controller {
 
       console.log(hashSum);
     } catch (e) {
-      throw new Errors(dict.ERROR_READ_FILE);
+      throw new AppError(dict.ERROR_READ_FILE);
     }
   }
 
   async compress(filePath, dest) {
+    if (!filePath || !dest) throw new InputError(dict.ERROR_INVALID_ARG);
+
     const srcPath = getAbsolutePath(
       filePath,
       path.format(this.state.pathObject)
     );
 
     const fileCheckResult = await fileCheckError(srcPath);
-    if (fileCheckResult) throw new Errors(fileCheckResult);
+    if (fileCheckResult) throw new AppError(fileCheckResult);
 
     const destPath = getAbsolutePath(dest, path.format(this.state.pathObject));
 
     if (await isPathExists(destPath)) {
-      throw new Errors(dict.FILE_EXISTS);
+      throw new AppError(dict.FILE_EXISTS);
     }
 
     const dirCheckResult = await dirCheckError(path.dirname(destPath));
-    if (dirCheckResult) throw new Errors(dirCheckResult);
+    if (dirCheckResult) throw new AppError(dirCheckResult);
 
     try {
       await getPromiseForBrotli(srcPath, destPath, 'compress');
     } catch (e) {
-      throw new Error(dict.ERROR_COMPRESS_FILE);
+      throw new AppError(dict.ERROR_COMPRESS_FILE);
     }
   }
 
   async decompress(filePath, dest) {
+    if (!filePath || !dest) throw new InputError(dict.ERROR_INVALID_ARG);
+
     const srcPath = getAbsolutePath(
       filePath,
       path.format(this.state.pathObject)
     );
 
     const fileCheckResult = await fileCheckError(srcPath);
-    if (fileCheckResult) throw new Errors(fileCheckResult);
+    if (fileCheckResult) throw new AppError(fileCheckResult);
 
     const destPath = getAbsolutePath(dest, path.format(this.state.pathObject));
 
     if (await isPathExists(destPath)) {
-      throw new Errors(dict.FILE_EXISTS);
+      throw new AppError(dict.FILE_EXISTS);
     }
 
     const dirCheckResult = await dirCheckError(path.dirname(destPath));
-    if (dirCheckResult) throw new Errors(dirCheckResult);
+    if (dirCheckResult) throw new AppError(dirCheckResult);
 
     try {
       await getPromiseForBrotli(srcPath, destPath, 'decompress');
     } catch (e) {
-      throw new Error(dict.ERROR_DECOMPRESS_FILE);
+      throw new AppError(dict.ERROR_DECOMPRESS_FILE);
     }
   }
 }
