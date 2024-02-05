@@ -3,7 +3,7 @@ import os from 'os';
 import path from 'path';
 import fsPromises from 'fs/promises';
 import { createHash } from 'crypto';
-import { dictionary as dict } from '../costants.js';
+import { dictionary as dict } from '../costants.mjs';
 import { AppError, InputError } from '../errors.js';
 import {
   getState,

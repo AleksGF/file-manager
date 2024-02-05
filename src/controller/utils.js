@@ -4,7 +4,7 @@ import { homedir as getHomedir } from 'os';
 import path from 'path';
 import { pipeline } from 'stream/promises';
 import { createBrotliCompress, createBrotliDecompress } from 'zlib';
-import { dictionary as dict } from '../costants.js';
+import { dictionary as dict } from '../costants.mjs';
 
 export const getUserName = () =>
   argv

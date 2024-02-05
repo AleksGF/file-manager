@@ -1,4 +1,4 @@
-import { dictionary as dict } from '../../costants.js';
+import { dictionary as dict } from '../../costants.mjs';
 
 export const showErrorMsgOnOperationFailed = (arg) => {
   console.log(

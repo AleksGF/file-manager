@@ -2,12 +2,12 @@ import readline from 'readline';
 import process, { stdin as input, stdout as output } from 'node:process';
 import { AppError, InputError } from '../errors.js';
 import { Controller } from '../controller/controller.js';
-import { doGreeting } from './utils/doGreeting.js';
-import { doBye } from './utils/doBye.js';
-import { showErrorMsgOnExit } from './utils/showErrorMsgOnExit.js';
-import { showErrorMsgOnInvalidInput } from './utils/showErrorMsgOnInvalidInput.js';
-import { showErrorMsgOnOperationFailed } from './utils/showErrorMsgOnOperationFailed.js';
-import { getInvitationText } from './utils/getInvitationText.js';
+import { doGreeting } from './utils/doGreeting.mjs';
+import { doBye } from './utils/doBye.mjs';
+import { showErrorMsgOnExit } from './utils/showErrorMsgOnExit.mjs';
+import { showErrorMsgOnInvalidInput } from './utils/showErrorMsgOnInvalidInput.mjs';
+import { showErrorMsgOnOperationFailed } from './utils/showErrorMsgOnOperationFailed.mjs';
+import { getInvitationText } from './utils/getInvitationText.mjs';
 
 export const startFileManager = () => {
   const controller = new Controller();
